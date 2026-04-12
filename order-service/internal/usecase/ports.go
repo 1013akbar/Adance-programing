@@ -22,6 +22,10 @@ type OrderRepository interface {
 }
 
 type PaymentClient interface {
-	AuthorizePayment(ctx context.Context, orderID string, amount int64) (string, string, error)
-	GetPaymentStatus(ctx context.Context, orderID string) (status string, found bool, err error)
+	AuthorizePayment(ctx context.Context, orderID string, amount int64) (statusStr, transactionID string, err error)
+	GetPaymentStatus(ctx context.Context, orderID string) (statusStr string, found bool, err error)
+}
+
+type StatusUpdater interface {
+	NotifyStatusUpdate(orderID, status string)
 }

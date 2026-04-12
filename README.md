@@ -1,15 +1,39 @@
-# Advanced Programming 2 - Assignment 1
-
-## Quick Links
-- 🎯 **Getting Started**: See [Quick Start](#quick-start-windows) below
-- 🧪 **Testing**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive test scenarios
-- 📋 **Submission Checklist**: See [SUBMISSION_CHECKLIST.md](SUBMISSION_CHECKLIST.md) for defense prep
-- 🎨 **Architecture**: [architecture-diagram.svg](architecture-diagram.svg)
+# Advanced Programming 2 - Assignment 2
 
 ## Student
-- Name: Akbar Khalili
+- Name: Taubakabyl Nurlybek
 - Course: Advanced Programming 2
-- Topic: Clean Architecture based Microservices (Order & Payment)
+- Topic: gRPC Migration & Contract-First Development (Order & Payment)
+
+## Proto Repositories
+- Protos: https://github.com/taubakabylnurlybek/ap2-protos
+- Generated Code: https://github.com/taubakabylnurlybek/ap2-generated
+
+## Implemented Scope
+- Migration from REST to gRPC for inter-service communication
+- Contract-First approach with Protocol Buffers
+- Server-side Streaming for real-time order updates
+- Clean Architecture preserved
+- gRPC interceptors for logging (bonus)
+- Environment-based configuration
+
+## Architecture Diagram
+```mermaid
+flowchart LR
+    Client --> OrderAPI[Order Service API - REST]
+    OrderAPI --> OrderUC[Order Use Cases]
+    OrderUC --> OrderRepo[Order Repository]
+    OrderRepo --> OrderDB[(Order DB)]
+
+    OrderUC --> PaymentClient[gRPC Payment Client]
+    PaymentClient --> PaymentGRPC[Payment Service gRPC]
+    PaymentGRPC --> PaymentUC[Payment Use Cases]
+    PaymentUC --> PaymentRepo[Payment Repository]
+    PaymentRepo --> PaymentDB[(Payment DB)]
+
+    StreamClient[gRPC Stream Client] --> OrderGRPC[Order Service gRPC Streaming]
+    OrderGRPC --> OrderUC
+```
 
 ## Implemented Scope
 - Two microservices in Go:
@@ -109,7 +133,7 @@ cd payment-service
 go mod tidy
 go run ./cmd/payment-service
 ```
-Payment service runs on: `http://localhost:8082`
+Payment service runs on: `http://localhost:8082` (REST), `localhost:50051` (gRPC)
 
 #### 3. Run order service (in new terminal)
 ```powershell
@@ -117,13 +141,17 @@ cd order-service
 go mod tidy
 go run ./cmd/order-service
 ```
-Order service runs on: `http://localhost:8081`
+Order service runs on: `http://localhost:8081` (REST), `localhost:50052` (gRPC)
 
-### Docker (Alternative)
+### Docker
 
 ```bash
 docker compose up --build
 ```
+
+Services:
+- Order Service: `http://localhost:8081` (REST), `localhost:50052` (gRPC)
+- Payment Service: `http://localhost:8082` (REST), `localhost:50051` (gRPC)
 
 ### Database Credentials
 
@@ -132,7 +160,73 @@ docker compose up --build
 | Order | order_user | 1234 | order_db | 5432 |
 | Payment | payment_user | 1234 | payment_db | 5432 |
 
-## API Testing
+## Demonstration for Teacher
+
+To show that everything works, run the demonstration script:
+
+```powershell
+.\demonstrate.ps1
+```
+
+This will:
+1. Check if all services are running
+2. Test REST APIs
+3. Test gRPC services with grpcurl
+4. Demonstrate inter-service gRPC communication
+5. Show how to test real-time streaming
+
+### Manual Testing Steps:
+
+#### 1. Start Services
+```powershell
+# Terminal 1
+cd payment-service && go run ./cmd/payment-service
+
+# Terminal 2  
+cd order-service && go run ./cmd/order-service
+```
+
+#### 2. Test REST APIs
+```bash
+# Check health
+curl http://localhost:8081/health
+curl http://localhost:8082/health
+
+# Create order (triggers gRPC call internally)
+curl -X POST http://localhost:8081/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "test", "item_name": "item", "amount": 5000}'
+```
+
+#### 3. Test gRPC Services
+```bash
+# List services
+grpcurl -plaintext localhost:50051 list
+grpcurl -plaintext localhost:50052 list
+
+# Call ProcessPayment directly
+grpcurl -plaintext -d '{"order_id": "test-id", "amount": 5000}' \
+  localhost:50051 payment.PaymentService/ProcessPayment
+```
+
+#### 4. Test Real-time Streaming
+```bash
+# Terminal 3 - Start streaming client
+go run client.go
+
+# Terminal 4 - Create order and cancel it
+curl -X POST http://localhost:8081/orders \
+  -H "Content-Type: application/json" \
+  -d '{"customer_id": "stream-test", "item_name": "streaming item", "amount": 1000}'
+
+# Get order ID from response, then cancel
+curl -X PATCH http://localhost:8081/orders/{order-id}/cancel
+```
+
+The streaming client will show real-time status updates!
+
+### Process Payment via gRPC
+The inter-service communication is now gRPC, but REST APIs are still available for external clients.
 
 ### Option 1: Web Frontend (Recommended for Demo)
 Open `frontend.html` in your browser to have an interactive UI for testing all endpoints.

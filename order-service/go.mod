@@ -5,8 +5,17 @@ go 1.22
 require (
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
-	github.com/lib/pq v1.10.9
+	github.com/taubakabylnurlybek/ap2-generated/order v0.0.0
+	github.com/taubakabylnurlybek/ap2-generated/payment v0.0.0-00010101000000-000000000000
+	google.golang.org/grpc v1.64.0
+	google.golang.org/protobuf v1.34.1
 )
+
+replace github.com/taubakabylnurlybek/ap2-generated => ../generated
+
+replace github.com/taubakabylnurlybek/ap2-generated/order => ../generated/order
+
+replace github.com/taubakabylnurlybek/ap2-generated/payment => ../generated/payment
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect
@@ -22,6 +31,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/lib/pq v1.12.3 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -33,6 +43,6 @@ require (
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
-	google.golang.org/protobuf v1.34.1 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

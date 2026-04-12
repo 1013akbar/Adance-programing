@@ -21,4 +21,7 @@ func RegisterRoutes(router *gin.Engine, h *Handler) {
 
 	router.POST("/payments", h.CreatePayment)
 	router.GET("/payments/:order_id", h.GetPaymentByOrderID)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "payment"})
+	})
 }

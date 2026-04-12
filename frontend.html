@@ -425,8 +425,8 @@
                 <div class="value">:8082</div>
             </div>
             <div class="stat-card">
-                <div class="label">Max Timeout</div>
-                <div class="value">2s</div>
+                <div class="label">gRPC Ports</div>
+                <div class="value">:50051-52</div>
             </div>
         </div>
 
@@ -500,6 +500,54 @@
                     </button>
 
                     <div id="payment-response" class="response"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-time Streaming Section -->
+        <div class="integration">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+                <!-- Streaming Monitor -->
+                <div class="card">
+                    <div class="card-header" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        📡 Real-time Order Updates
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label>Order ID to Monitor</label>
+                            <input type="text" id="stream-order-id" placeholder="e.g., order-123">
+                        </div>
+                        <div class="button-group single">
+                            <button class="btn-primary" onclick="startStreaming()">
+                                ▶️ Start Monitoring
+                            </button>
+                            <button class="btn-secondary" onclick="stopStreaming()">
+                                ⏹️ Stop Monitoring
+                            </button>
+                        </div>
+                        <div id="streaming-status" class="response" style="margin-top: 15px; display: none;"></div>
+                        <div id="streaming-updates" style="margin-top: 15px; max-height: 200px; overflow-y: auto; background: #f8fafc; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- gRPC Call Monitor -->
+                <div class="card">
+                    <div class="card-header" style="background: linear-gradient(135deg, #10b981, #059669);">
+                        🔄 gRPC Communication
+                    </div>
+                    <div class="card-body">
+                        <div id="grpc-activity" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div class="grpc-indicator" style="width: 12px; height: 12px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                                <span style="font-weight: 600; color: #10b981;">gRPC Active</span>
+                            </div>
+                            <div id="grpc-log" style="max-height: 150px; overflow-y: auto; background: #f0fdf4; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 0.75rem;"></div>
+                        </div>
+                        <div id="grpc-inactive" style="text-align: center; color: #6b7280; padding: 20px;">
+                            <div style="font-size: 2rem; margin-bottom: 10px;">⚪</div>
+                            Waiting for gRPC activity...
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -719,6 +767,114 @@
                 showResponse('payment-response', `Error: ${error.message}`, true);
             }
         }
+
+        // Assignment 2: Real-time Streaming & gRPC Monitoring
+        let streamingInterval = null;
+        let lastOrderStatus = null;
+
+        function startStreaming() {
+            const orderId = document.getElementById('stream-order-id').value.trim();
+            if (!orderId) {
+                showResponse('streaming-status', 'Please enter an Order ID to monitor', true);
+                return;
+            }
+
+            stopStreaming();
+
+            document.getElementById('streaming-status').style.display = 'block';
+            document.getElementById('streaming-updates').style.display = 'block';
+            document.getElementById('streaming-updates').innerHTML = '';
+
+            showResponse('streaming-status', `Monitoring order ${orderId}...`);
+
+            streamingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_CONFIG.order}/orders/${orderId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        const currentStatus = data.Status;
+
+                        if (lastOrderStatus !== currentStatus) {
+                            const timestamp = new Date().toLocaleTimeString();
+                            const updateDiv = document.createElement('div');
+                            updateDiv.style.padding = '4px 0';
+                            updateDiv.style.borderBottom = '1px solid #e5e7eb';
+                            updateDiv.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="font-weight: 600; color: ${getStatusColor(currentStatus)}">${currentStatus}</span>`;
+                            document.getElementById('streaming-updates').appendChild(updateDiv);
+                            document.getElementById('streaming-updates').scrollTop = document.getElementById('streaming-updates').scrollHeight;
+                            lastOrderStatus = currentStatus;
+                        }
+                    }
+                } catch (error) {
+                    console.log('Streaming check failed:', error);
+                }
+            }, 1000);
+        }
+
+        function stopStreaming() {
+            if (streamingInterval) {
+                clearInterval(streamingInterval);
+                streamingInterval = null;
+                lastOrderStatus = null;
+                document.getElementById('streaming-status').style.display = 'none';
+                document.getElementById('streaming-updates').style.display = 'none';
+            }
+        }
+
+        function getStatusColor(status) {
+            switch (status) {
+                case 'Paid': return '#10b981';
+                case 'Failed': return '#ef4444';
+                case 'Cancelled': return '#f59e0b';
+                default: return '#6b7280';
+            }
+        }
+
+        // gRPC Activity Monitoring
+        let grpcCallCount = 0;
+
+        function logGrpcCall(service, method, data = {}) {
+            grpcCallCount++;
+            document.getElementById('grpc-inactive').style.display = 'none';
+            document.getElementById('grpc-activity').style.display = 'block';
+
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '4px';
+            logEntry.style.fontSize = '0.7rem';
+            logEntry.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="color: #10b981; font-weight: 600;">${service}.${method}</span> <span style="color: #374151;">${JSON.stringify(data).substring(0, 50)}...</span>`;
+
+            const logContainer = document.getElementById('grpc-log');
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            // Auto-hide after 10 seconds of inactivity
+            setTimeout(() => {
+                if (grpcCallCount === 0) {
+                    document.getElementById('grpc-activity').style.display = 'none';
+                    document.getElementById('grpc-inactive').style.display = 'block';
+                }
+            }, 10000);
+        }
+
+        // Intercept createOrder to show gRPC activity
+        const originalCreateOrder = window.createOrder;
+        window.createOrder = async function() {
+            logGrpcCall('PaymentService', 'ProcessPayment', { order_id: 'pending', amount: document.getElementById('order-amount').value });
+            const result = await originalCreateOrder();
+            grpcCallCount--;
+            return result;
+        };
+
+        // Add CSS animation for gRPC indicator
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

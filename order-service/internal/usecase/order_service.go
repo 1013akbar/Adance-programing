@@ -12,10 +12,15 @@ import (
 type OrderService struct {
 	repo          OrderRepository
 	paymentClient PaymentClient
+	statusUpdater StatusUpdater
 }
 
 func NewOrderService(repo OrderRepository, paymentClient PaymentClient) *OrderService {
 	return &OrderService{repo: repo, paymentClient: paymentClient}
+}
+
+func (s *OrderService) SetStatusUpdater(updater StatusUpdater) {
+	s.statusUpdater = updater
 }
 
 func (s *OrderService) CreateOrder(ctx context.Context, customerID, itemName string, amount int64, idempotencyKey string) (*domain.Order, bool, error) {
@@ -78,6 +83,9 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*domain.Or
 			if nextStatus != order.Status {
 				if err := s.repo.UpdateStatus(ctx, order.ID, nextStatus); err == nil {
 					order.Status = nextStatus
+					if s.statusUpdater != nil {
+						s.statusUpdater.NotifyStatusUpdate(order.ID, nextStatus)
+					}
 				}
 			}
 		}
@@ -101,5 +109,8 @@ func (s *OrderService) CancelOrder(ctx context.Context, orderID string) (*domain
 	}
 
 	order.Status = domain.OrderStatusCancelled
+	if s.statusUpdater != nil {
+		s.statusUpdater.NotifyStatusUpdate(orderID, domain.OrderStatusCancelled)
+	}
 	return order, nil
 }

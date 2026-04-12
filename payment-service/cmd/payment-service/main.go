@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"payment-service/internal/app"
 	"payment-service/internal/repository"
 	transporthttp "payment-service/internal/transport/http"
+	transportgrpc "payment-service/internal/transport/grpc"
 	"payment-service/internal/usecase"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/taubakabylnurlybek/ap2-generated/payment"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	_ "github.com/lib/pq"
 )
 
@@ -26,11 +32,32 @@ func main() {
 	orderClient := app.NewRESTOrderClient(orderBaseURL, orderHTTPClient)
 	paymentUC := usecase.NewPaymentService(paymentRepo, orderClient)
 	handler := transporthttp.NewHandler(paymentUC)
+	paymentGRPCServer := transportgrpc.NewPaymentServiceServer(paymentUC)
 
 	router := gin.Default()
 	transporthttp.RegisterRoutes(router, handler)
 
+	// Start gRPC server
+	grpcPort := getEnv("GRPC_PORT", "50051")
+	lis, err := net.Listen("tcp", ":"+grpcPort)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(loggingInterceptor),
+	)
+	payment.RegisterPaymentServiceServer(grpcServer, paymentGRPCServer)
+	reflection.Register(grpcServer)
+
+	go func() {
+		log.Printf("gRPC server listening on :%s", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			log.Fatalf("failed to serve gRPC: %v", err)
+		}
+	}()
+
 	port := getEnv("HTTP_PORT", "8082")
+	log.Printf("HTTP server listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("failed to run payment service: %v", err)
 	}
@@ -56,11 +83,19 @@ func connectDB() *sql.DB {
 	return nil
 }
 
-func getEnv(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+func loggingInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	duration := time.Since(start)
+	log.Printf("gRPC request: method=%s, duration=%v, error=%v", info.FullMethod, duration, err)
+	return resp, err
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
 	}
-	return fallback
+	return defaultValue
 }
 
 func init() {

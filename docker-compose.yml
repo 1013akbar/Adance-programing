@@ -31,14 +31,17 @@ services:
     working_dir: /app
     volumes:
       - ./payment-service:/app
+      - ./generated:/generated
     command: sh -c "go mod download && go run ./cmd/payment-service"
     environment:
       DB_DSN: postgres://payment_user:payment_pass@payment-db:5432/payment_db?sslmode=disable
       HTTP_PORT: 8082
+      GRPC_PORT: 50051
     depends_on:
       - payment-db
     ports:
       - "8082:8082"
+      - "50051:50051"
 
   order-service:
     image: golang:1.22
@@ -46,16 +49,19 @@ services:
     working_dir: /app
     volumes:
       - ./order-service:/app
+      - ./generated:/generated
     command: sh -c "go mod download && go run ./cmd/order-service"
     environment:
       DB_DSN: postgres://order_user:order_pass@order-db:5432/order_db?sslmode=disable
-      PAYMENT_SERVICE_BASE_URL: http://payment-service:8082
+      PAYMENT_SERVICE_ADDR: payment-service:50051
       HTTP_PORT: 8081
+      GRPC_PORT: 50052
     depends_on:
       - order-db
       - payment-service
     ports:
       - "8081:8081"
+      - "50052:50052"
 
 volumes:
   order_db_data:

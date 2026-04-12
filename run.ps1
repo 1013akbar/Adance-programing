@@ -36,7 +36,7 @@ Write-Host "`n[2/3] Starting payment service..." -ForegroundColor Yellow
 Set-Location "payment-service"
 go mod tidy | Out-Null
 Start-Process pwsh -ArgumentList "-NoExit", "-Command", "go run ./cmd/payment-service"
-Write-Host "✓ Payment service started on http://localhost:8082" -ForegroundColor Green
+Write-Host "✓ Payment service started on http://localhost:8082 (REST), localhost:50051 (gRPC)" -ForegroundColor Green
 
 Start-Sleep -Seconds 2
 
@@ -45,15 +45,15 @@ Write-Host "`n[3/3] Starting order service..." -ForegroundColor Yellow
 Set-Location "..\order-service"
 go mod tidy | Out-Null
 Start-Process pwsh -ArgumentList "-NoExit", "-Command", "go run ./cmd/order-service"
-Write-Host "✓ Order service started on http://localhost:8081" -ForegroundColor Green
+Write-Host "✓ Order service started on http://localhost:8081 (REST), localhost:50052 (gRPC)" -ForegroundColor Green
 
 Write-Host "`n=====================================" -ForegroundColor Cyan
 Write-Host "✓ System is running!" -ForegroundColor Green
 Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Services:" -ForegroundColor Cyan
-Write-Host "  Order Service:   http://localhost:8081" -ForegroundColor White
-Write-Host "  Payment Service: http://localhost:8082" -ForegroundColor White
+Write-Host "  Order Service:   http://localhost:8081 (REST), localhost:50052 (gRPC)" -ForegroundColor White
+Write-Host "  Payment Service: http://localhost:8082 (REST), localhost:50051 (gRPC)" -ForegroundColor White
 Write-Host ""
 Write-Host "Test endpoints:" -ForegroundColor Cyan
 Write-Host "  Create order:  POST http://localhost:8081/orders" -ForegroundColor White

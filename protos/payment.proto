@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package payment;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/taubakabylnurlybek/ap2-generated/payment";
+
+service PaymentService {
+  rpc ProcessPayment(PaymentRequest) returns (PaymentResponse);
+  rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
+}
+
+message PaymentRequest {
+  string order_id = 1;
+  int64 amount = 2;~
+}
+~
+message PaymentResponse {
+  string id = 1;
+  string order_id = 2;
+  string transaction_id = 3;
+  int64 amount = 4;
+  string status = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message PaymentStatusRequest {
+  string order_id = 1;
+}
+
+message PaymentStatusResponse {
+  string status = 1;
+  bool found = 2;
+}

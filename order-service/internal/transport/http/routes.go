@@ -22,4 +22,7 @@ func RegisterRoutes(router *gin.Engine, h *Handler) {
 	router.POST("/orders", h.CreateOrder)
 	router.GET("/orders/:id", h.GetOrder)
 	router.PATCH("/orders/:id/cancel", h.CancelOrder)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "ok", "service": "order"})
+	})
 }
