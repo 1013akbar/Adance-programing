@@ -1,0 +1,439 @@
+{
+  "info": {
+    "_postman_id": "order-payment-microservices",
+    "name": "Order & Payment Microservices API",
+    "description": "Advanced Programming 2 - Assignment 1: Clean Architecture Microservices",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Order Service",
+      "item": [
+        {
+          "name": "Create Order (Authorized)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response has order ID', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.exist;",
+                  "    pm.environment.set('order_id', jsonData.id);",
+                  "});",
+                  "",
+                  "pm.test('Order status is Paid', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.equal('Paid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "order-001-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customer_id\": \"cust-001\",\n    \"item_name\": \"Laptop\",\n    \"amount\": 15000\n}"
+            },
+            "url": {
+              "raw": "{{order_service_url}}/orders",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Order (Declined - Exceeds Limit)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Order status is Failed', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.equal('Failed');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customer_id\": \"cust-002\",\n    \"item_name\": \"Mercedes\",\n    \"amount\": 150001\n}"
+            },
+            "url": {
+              "raw": "{{order_service_url}}/orders",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_url}}/orders/:id",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{order_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cancel Order (Pending)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Order status is Cancelled', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.equal('Cancelled');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_url}}/orders/:id/cancel",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{order_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Pending Order for Cancel Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "pm.environment.set('pending_order_id', jsonData.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "pending-order-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customer_id\": \"cust-pending\",\n    \"item_name\": \"Test Item\",\n    \"amount\": 5000\n}"
+            },
+            "url": {
+              "raw": "{{order_service_url}}/orders",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Service",
+      "item": [
+        {
+          "name": "Create Payment (Authorized)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"order_id\": \"ord-001\",\n    \"amount\": 25000\n}"
+            },
+            "url": {
+              "raw": "{{payment_service_url}}/payments",
+              "protocol": "http",
+              "host": [
+                "{{payment_service_url}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Payment (Declined - Exceeds Limit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"order_id\": \"ord-002\",\n    \"amount\": 150001\n}"
+            },
+            "url": {
+              "raw": "{{payment_service_url}}/payments",
+              "protocol": "http",
+              "host": [
+                "{{payment_service_url}}"
+              ],
+              "path": [
+                "payments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment by Order ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{payment_service_url}}/payments/:order_id",
+              "protocol": "http",
+              "host": [
+                "{{payment_service_url}}"
+              ],
+              "path": [
+                "payments",
+                ":order_id"
+              ],
+              "variable": [
+                {
+                  "key": "order_id",
+                  "value": "ord-001"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration Tests",
+      "item": [
+        {
+          "name": "1. Create Order (Triggers Payment)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Order created and paid', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.equal('Paid');",
+                  "    pm.environment.set('test_order_id', jsonData.id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "integration-test-{{$timestamp}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customer_id\": \"cust-integration\",\n    \"item_name\": \"Integration Test Item\",\n    \"amount\": 50000\n}"
+            },
+            "url": {
+              "raw": "{{order_service_url}}/orders",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2. Verify Order Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_url}}/orders/:id",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{test_order_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Try to Cancel Paid Order (Should Fail)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Cannot cancel paid order (409 Conflict)', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{order_service_url}}/orders/:id/cancel",
+              "protocol": "http",
+              "host": [
+                "{{order_service_url}}"
+              ],
+              "path": [
+                "orders",
+                ":id",
+                "cancel"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "{{test_order_id}}"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Sets default URLs if not already set",
+          "if (!pm.environment.get('order_service_url')) {",
+          "    pm.environment.set('order_service_url', 'localhost:8081');",
+          "}",
+          "if (!pm.environment.get('payment_service_url')) {",
+          "    pm.environment.set('payment_service_url', 'localhost:8082');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "order_service_url",
+      "value": "localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "payment_service_url",
+      "value": "localhost:8082",
+      "type": "string"
+    }
+  ]
+}

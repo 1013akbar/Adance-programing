@@ -1,0 +1,95 @@
+<svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="600" y="30" font-size="28" font-weight="bold" text-anchor="middle" fill="#333">
+    Order &amp; Payment Microservices Architecture
+  </text>
+  
+  <!-- Client Section -->
+  <rect x="450" y="80" width="300" height="80" fill="#E3F2FD" stroke="#1976D2" stroke-width="2" rx="5"/>
+  <text x="600" y="115" font-size="16" font-weight="bold" text-anchor="middle" fill="#1976D2">Client</text>
+  <text x="600" y="140" font-size="14" text-anchor="middle" fill="#555">(Web UI / Postman / curl)</text>
+  
+  <!-- Arrow down -->
+  <path d="M 600 160 L 600 200" stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+  
+  <!-- Order Service Section -->
+  <g>
+    <!-- Container -->
+    <rect x="50" y="220" width="500" height="520" fill="none" stroke="#FF6B6B" stroke-width="3" stroke-dasharray="5,5" rx="8"/>
+    <text x="70" y="245" font-size="16" font-weight="bold" fill="#FF6B6B">ORDER SERVICE (Port 8081)</text>
+    
+    <!-- Transport Layer -->
+    <rect x="70" y="270" width="460" height="70" fill="#FFE0E0" stroke="#FF6B6B" stroke-width="2" rx="5"/>
+    <text x="300" y="290" font-size="13" font-weight="bold" text-anchor="middle" fill="#C41C3B">HTTP Transport</text>
+    <text x="300" y="310" font-size="12" text-anchor="middle" fill="#555">POST /orders, GET /orders/:id, PATCH /orders/:id/cancel</text>
+    
+    <!-- Usecase Layer -->
+    <rect x="70" y="360" width="460" height="70" fill="#FFC9C9" stroke="#FF6B6B" stroke-width="2" rx="5"/>
+    <text x="300" y="380" font-size="13" font-weight="bold" text-anchor="middle" fill="#C41C3B">Use Case Layer</text>
+    <text x="300" y="400" font-size="12" text-anchor="middle" fill="#555">OrderService - Business logic &amp; payment calls</text>
+    
+    <!-- Repository Layer -->
+    <rect x="70" y="450" width="460" height="70" fill="#FFD4D4" stroke="#FF6B6B" stroke-width="2" rx="5"/>
+    <text x="300" y="470" font-size="13" font-weight="bold" text-anchor="middle" fill="#C41C3B">Repository Layer</text>
+    <text x="300" y="490" font-size="12" text-anchor="middle" fill="#555">OrderPostgresRepository - DB operations</text>
+    
+    <!-- Database -->
+    <rect x="70" y="540" width="460" height="80" fill="#E8F5E9" stroke="#388E3C" stroke-width="2" rx="5"/>
+    <text x="300" y="565" font-size="13" font-weight="bold" text-anchor="middle" fill="#2E7D32">PostgreSQL</text>
+    <text x="300" y="585" font-size="12" text-anchor="middle" fill="#555">Database: order_db</text>
+    <text x="300" y="605" font-size="11" text-anchor="middle" fill="#666">(order_user:1234@localhost:5432)</text>
+  </g>
+  
+  <!-- Payment Service Section -->
+  <g>
+    <!-- Container -->
+    <rect x="650" y="220" width="500" height="520" fill="none" stroke="#4ECDC4" stroke-width="3" stroke-dasharray="5,5" rx="8"/>
+    <text x="670" y="245" font-size="16" font-weight="bold" fill="#4ECDC4">PAYMENT SERVICE (Port 8082)</text>
+    
+    <!-- Transport Layer -->
+    <rect x="670" y="270" width="460" height="70" fill="#C5F1F0" stroke="#4ECDC4" stroke-width="2" rx="5"/>
+    <text x="900" y="290" font-size="13" font-weight="bold" text-anchor="middle" fill="#0097A7">HTTP Transport</text>
+    <text x="900" y="310" font-size="12" text-anchor="middle" fill="#555">POST /payments, GET /payments/:order_id</text>
+    
+    <!-- Usecase Layer -->
+    <rect x="670" y="360" width="460" height="70" fill="#B3E5E1" stroke="#4ECDC4" stroke-width="2" rx="5"/>
+    <text x="900" y="380" font-size="13" font-weight="bold" text-anchor="middle" fill="#0097A7">Use Case Layer</text>
+    <text x="900" y="400" font-size="12" text-anchor="middle" fill="#555">PaymentService - Payment authorization logic</text>
+    
+    <!-- Repository Layer -->
+    <rect x="670" y="450" width="460" height="70" fill="#A1E5DD" stroke="#4ECDC4" stroke-width="2" rx="5"/>
+    <text x="900" y="470" font-size="13" font-weight="bold" text-anchor="middle" fill="#0097A7">Repository Layer</text>
+    <text x="900" y="490" font-size="12" text-anchor="middle" fill="#555">PaymentPostgresRepository - DB operations</text>
+    
+    <!-- Database -->
+    <rect x="670" y="540" width="460" height="80" fill="#E8F5E9" stroke="#388E3C" stroke-width="2" rx="5"/>
+    <text x="900" y="565" font-size="13" font-weight="bold" text-anchor="middle" fill="#2E7D32">PostgreSQL</text>
+    <text x="900" y="585" font-size="12" text-anchor="middle" fill="#555">Database: payment_db</text>
+    <text x="900" y="605" font-size="11" text-anchor="middle" fill="#666">(payment_user:1234@localhost:5432)</text>
+  </g>
+  
+  <!-- Synchronous REST Call -->
+  <path d="M 530 400 L 650 400" stroke="#FF9800" stroke-width="3" fill="none" marker-end="url(#arrowhead-orange)"/>
+  <rect x="560" y="385" width="70" height="30" fill="#FFF3E0" stroke="#FF9800" stroke-width="1" rx="3"/>
+  <text x="595" y="405" font-size="11" font-weight="bold" text-anchor="middle" fill="#E65100">2s Timeout</text>
+  
+  <!-- Key Features Box -->
+  <rect x="50" y="720" width="1100" height="70" fill="#F5F5F5" stroke="#999" stroke-width="1" rx="5"/>
+  <text x="600" y="740" font-size="13" font-weight="bold" text-anchor="middle" fill="#333">Key Features:</text>
+  <text x="70" y="760" font-size="12" fill="#555">
+    ✓ Separate Database per Service  ✓ No Shared Code  ✓ Timeout on REST Calls (2s)  ✓ Idempotency Support
+  </text>
+  <text x="70" y="778" font-size="12" fill="#555">
+    ✓ Bounded Contexts (Order &lt;-&gt; Payment)  ✓ Clean Architecture (Domain → UseCase → Repo → Transport)  ✓ int64 for Money (cents)
+  </text>
+  
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#666"/>
+    </marker>
+    <marker id="arrowhead-orange" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+      <polygon points="0 0, 10 5, 0 10" fill="#FF9800"/>
+    </marker>
+  </defs>
+</svg>
