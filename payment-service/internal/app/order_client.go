@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 )
 
 type RESTOrderClient struct {
@@ -33,18 +35,20 @@ func (c *RESTOrderClient) GetOrder(ctx context.Context, orderID string) (int64, 
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
 		return 0, false, nil
 	}
-	if resp.StatusCode >= 500 {
-		return 0, false, fmt.Errorf("order service returned status %d", resp.StatusCode)
-	}
 	if resp.StatusCode >= 400 {
-		return 0, false, fmt.Errorf("order lookup failed with status %d", resp.StatusCode)
+		errMsg := strings.TrimSpace(string(body))
+		if errMsg == "" {
+			errMsg = fmt.Sprintf("order service returned status %d", resp.StatusCode)
+		}
+		return 0, false, fmt.Errorf(errMsg)
 	}
 
 	var result getOrderResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return 0, false, err
 	}
 

@@ -1,8 +1,11 @@
 DROP DATABASE IF EXISTS order_db;
 DROP DATABASE IF EXISTS payment_db;
+DROP DATABASE IF EXISTS notification_db;
 CREATE USER order_user WITH PASSWORD '1234';
 CREATE USER payment_user WITH PASSWORD '1234';
 CREATE DATABASE order_db OWNER order_user;
 CREATE DATABASE payment_db OWNER payment_user;
+CREATE DATABASE notification_db OWNER payment_user;
 GRANT ALL PRIVILEGES ON DATABASE order_db TO order_user;
 GRANT ALL PRIVILEGES ON DATABASE payment_db TO payment_user;
+GRANT ALL PRIVILEGES ON DATABASE notification_db TO payment_user;

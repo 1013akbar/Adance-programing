@@ -264,6 +264,38 @@
             color: var(--danger);
         }
 
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 999;
+        }
+
+        .toast {
+            background: rgba(15, 23, 42, 0.95);
+            color: white;
+            min-width: 280px;
+            border-radius: 12px;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.2);
+            padding: 16px 18px;
+            font-size: 0.95rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast strong {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 700;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .integration {
             background: white;
             border-radius: 16px;
@@ -371,6 +403,15 @@
             background: var(--neutral-400);
         }
 
+        code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+
         @media (max-width: 1024px) {
             .content {
                 grid-template-columns: 1fr;
@@ -410,6 +451,8 @@
             <h1> Order & Payment Platform</h1>
             <p>Modern Microservices Architecture in Action</p>
         </header>
+
+        <div class="toast-container" id="toast-container"></div>
 
         <div class="stats-grid">
             <div class="stat-card">
@@ -530,6 +573,26 @@
                     </div>
                 </div>
 
+                <!-- Notification Event Monitor -->
+                <div class="card">
+                    <div class="card-header" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">
+                        📧 Notification Events
+                    </div>
+                    <div class="card-body">
+                        <div id="notification-activity" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                <div class="notification-indicator" style="width: 12px; height: 12px; background: #8b5cf6; border-radius: 50%; animation: pulse 2s infinite;"></div>
+                                <span style="font-weight: 600; color: #8b5cf6;">Notifications Active</span>
+                            </div>
+                            <div id="notification-log" style="max-height: 150px; overflow-y: auto; background: #faf5ff; padding: 8px; border-radius: 4px; font-family: monospace; font-size: 0.75rem;"></div>
+                        </div>
+                        <div id="notification-inactive" style="text-align: center; color: #6b7280; padding: 20px;">
+                            <div style="font-size: 2rem; margin-bottom: 10px;">📭</div>
+                            Waiting for notification events...
+                        </div>
+                    </div>
+                </div>
+
                 <!-- gRPC Call Monitor -->
                 <div class="card">
                     <div class="card-header" style="background: linear-gradient(135deg, #10b981, #059669);">
@@ -602,7 +665,8 @@
 
         const API_CONFIG = {
             order: 'http://localhost:8081',
-            payment: 'http://localhost:8082'
+            payment: 'http://localhost:8082',
+            notification: 'http://localhost:8083'
         };
 
         function showResponse(elementId, data, isError = false) {
@@ -622,10 +686,45 @@
             elem.className = 'response loading';
         }
 
+        async function parseResponseBody(response) {
+            const text = await response.text();
+            if (!text) {
+                return {
+                    message: response.statusText || 'No response body returned',
+                };
+            }
+            try {
+                return JSON.parse(text);
+            } catch {
+                return { message: text };
+            }
+        }
+
+        function getResponseError(response, data) {
+            if (!data) {
+                return response.statusText || 'Unknown error';
+            }
+            if (typeof data === 'string') {
+                return data;
+            }
+            return data.error || data.message || data.detail || response.statusText || JSON.stringify(data);
+        }
+
+        function showToast(title, message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.remove();
+            }, 5500);
+        }
+
         async function createOrder() {
             const customerId = document.getElementById('order-customer-id').value;
             const itemName = document.getElementById('order-item-name').value;
-            const amount = parseInt(document.getElementById('order-amount').value);
+            const amount = parseInt(document.getElementById('order-amount').value, 10);
 
             if (!customerId || !itemName || !amount) {
                 showResponse('order-response', 'Please fill all fields', true);
@@ -648,12 +747,19 @@
                     })
                 });
 
-                const data = await response.json();
-                lastCreatedOrderId = data.ID;
-                document.getElementById('order-id').value = data.ID;
-                
+                const data = await parseResponseBody(response);
+                const orderId = data.ID || data.id || data.order_id || data.orderId;
+                if (orderId) {
+                    lastCreatedOrderId = orderId;
+                    document.getElementById('order-id').value = orderId;
+                    document.getElementById('pay-order-id').value = orderId;
+                    document.getElementById('get-pay-order-id').value = orderId;
+                    document.getElementById('stream-order-id').value = orderId;
+                }
+
                 if (!response.ok) {
-                    showResponse('order-response', `Error: ${response.status} - ${JSON.stringify(data)}`, true);
+                    const errorMessage = getResponseError(response, data);
+                    showResponse('order-response', `Error: ${response.status} - ${errorMessage}`, true);
                 } else {
                     showResponse('order-response', data);
                 }
@@ -673,10 +779,11 @@
 
             try {
                 const response = await fetch(`${API_CONFIG.order}/orders/${orderId}`);
-                const data = await response.json();
+                const data = await parseResponseBody(response);
                 
                 if (!response.ok) {
-                    showResponse('order-response', `Error: ${response.status} - ${JSON.stringify(data)}`, true);
+                    const errorMessage = getResponseError(response, data);
+                    showResponse('order-response', `Error: ${response.status} - ${errorMessage}`, true);
                 } else {
                     showResponse('order-response', data);
                 }
@@ -698,10 +805,11 @@
                 const response = await fetch(`${API_CONFIG.order}/orders/${orderId}/cancel`, {
                     method: 'PATCH'
                 });
-                const data = await response.json();
+                const data = await parseResponseBody(response);
                 
                 if (!response.ok) {
-                    showResponse('order-response', `Error: ${response.status} - ${JSON.stringify(data)}`, true);
+                    const errorMessage = getResponseError(response, data);
+                    showResponse('order-response', `Error: ${response.status} - ${errorMessage}`, true);
                 } else {
                     showResponse('order-response', data);
                 }
@@ -712,12 +820,15 @@
 
         async function createPayment() {
             const orderId = document.getElementById('pay-order-id').value;
-            const amount = parseInt(document.getElementById('pay-amount').value);
+            const amount = parseInt(document.getElementById('pay-amount').value, 10);
 
             if (!orderId || !amount) {
                 showResponse('payment-response', 'Please fill all fields', true);
                 return;
             }
+
+            // Log gRPC call
+            logGrpcCall('PaymentService', 'CreatePayment', { order_id: orderId, amount: amount });
 
             showLoading('payment-response');
 
@@ -733,15 +844,19 @@
                     })
                 });
 
-                const data = await response.json();
-                
+                const data = await parseResponseBody(response);
+                const errorMessage = getResponseError(response, data);
+
                 if (!response.ok) {
-                    showResponse('payment-response', `Error: ${response.status} - ${JSON.stringify(data)}`, true);
+                    showResponse('payment-response', `Error: ${response.status} - ${errorMessage}`, true);
+                    showToast('Payment Failed', errorMessage);
                 } else {
                     showResponse('payment-response', data);
+                    showToast('Payment Success', `Payment for order ${orderId} was created successfully.`);
                 }
             } catch (error) {
                 showResponse('payment-response', `Error: ${error.message}`, true);
+                showToast('Payment Error', error.message);
             }
         }
 
@@ -752,14 +867,18 @@
                 return;
             }
 
+            // Log gRPC call
+            logGrpcCall('PaymentService', 'GetPaymentByOrderID', { order_id: orderId });
+
             showLoading('payment-response');
 
             try {
                 const response = await fetch(`${API_CONFIG.payment}/payments/${orderId}`);
-                const data = await response.json();
-                
+                const data = await parseResponseBody(response);
+                const errorMessage = getResponseError(response, data);
+
                 if (!response.ok) {
-                    showResponse('payment-response', `Error: ${response.status} - ${JSON.stringify(data)}`, true);
+                    showResponse('payment-response', `Error: ${response.status} - ${errorMessage}`, true);
                 } else {
                     showResponse('payment-response', data);
                 }
@@ -787,6 +906,27 @@
 
             showResponse('streaming-status', `Monitoring order ${orderId}...`);
 
+            // Fetch initial status first
+            fetch(`${API_CONFIG.order}/orders/${orderId}`)
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    throw new Error('Failed to fetch initial order');
+                })
+                .then(data => {
+                    lastOrderStatus = data.Status;
+                    const timestamp = new Date().toLocaleTimeString();
+                    const initialDiv = document.createElement('div');
+                    initialDiv.style.padding = '4px 0';
+                    initialDiv.style.borderBottom = '1px solid #e5e7eb';
+                    initialDiv.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="font-weight: 600; color: ${getStatusColor(data.Status)}">Initial: ${data.Status}</span>`;
+                    document.getElementById('streaming-updates').appendChild(initialDiv);
+                })
+                .catch(error => {
+                    showResponse('streaming-status', `Failed to fetch order: ${error.message}`, true);
+                });
+
             streamingInterval = setInterval(async () => {
                 try {
                     const response = await fetch(`${API_CONFIG.order}/orders/${orderId}`);
@@ -799,7 +939,7 @@
                             const updateDiv = document.createElement('div');
                             updateDiv.style.padding = '4px 0';
                             updateDiv.style.borderBottom = '1px solid #e5e7eb';
-                            updateDiv.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="font-weight: 600; color: ${getStatusColor(currentStatus)}">${currentStatus}</span>`;
+                            updateDiv.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="font-weight: 600; color: ${getStatusColor(currentStatus)}">📌 ${lastOrderStatus} → ${currentStatus}</span>`;
                             document.getElementById('streaming-updates').appendChild(updateDiv);
                             document.getElementById('streaming-updates').scrollTop = document.getElementById('streaming-updates').scrollHeight;
                             lastOrderStatus = currentStatus;
@@ -832,6 +972,7 @@
 
         // gRPC Activity Monitoring
         let grpcCallCount = 0;
+        let grpcTimeout = null;
 
         function logGrpcCall(service, method, data = {}) {
             grpcCallCount++;
@@ -848,23 +989,107 @@
             logContainer.appendChild(logEntry);
             logContainer.scrollTop = logContainer.scrollHeight;
 
-            // Auto-hide after 10 seconds of inactivity
-            setTimeout(() => {
-                if (grpcCallCount === 0) {
-                    document.getElementById('grpc-activity').style.display = 'none';
-                    document.getElementById('grpc-inactive').style.display = 'block';
-                }
-            }, 10000);
+            // Clear existing timeout and set new one
+            clearTimeout(grpcTimeout);
+            grpcTimeout = setTimeout(() => {
+                document.getElementById('grpc-activity').style.display = 'none';
+                document.getElementById('grpc-inactive').style.display = 'block';
+                grpcCallCount = 0;
+            }, 8000);
         }
 
-        // Intercept createOrder to show gRPC activity
-        const originalCreateOrder = window.createOrder;
-        window.createOrder = async function() {
-            logGrpcCall('PaymentService', 'ProcessPayment', { order_id: 'pending', amount: document.getElementById('order-amount').value });
-            const result = await originalCreateOrder();
-            grpcCallCount--;
-            return result;
-        };
+        // Notification Event Monitoring
+        let notificationCallCount = 0;
+        let notificationTimeout = null;
+        let notificationServiceAvailable = false;
+        const seenNotificationIds = new Set();
+
+        async function pollNotifications() {
+            try {
+                const response = await fetch(`${API_CONFIG.notification}/notifications`);
+                if (!response.ok) {
+                    notificationServiceAvailable = false;
+                    return;
+                }
+
+                notificationServiceAvailable = true;
+                updateNotificationServiceStatus(true);
+
+                const notifications = await response.json();
+                notifications.reverse().forEach(notification => {
+                    const orderId = notification.order_id || notification.orderId || notification.orderId;
+                    if (!seenNotificationIds.has(orderId)) {
+                        seenNotificationIds.add(orderId);
+                        logNotificationEvent(orderId, notification.amount, notification.customer_email || notification.customerEmail || 'unknown@example.com');
+                    }
+                });
+            } catch (error) {
+                console.log('Notification polling failed:', error);
+                notificationServiceAvailable = false;
+                updateNotificationServiceStatus(false);
+            }
+        }
+
+        function startNotificationPolling() {
+            pollNotifications();
+            setInterval(pollNotifications, 2000);
+        }
+
+        // Start polling when page loads
+        startNotificationPolling();
+
+        function logNotificationEvent(orderId, amount, customerEmail) {
+            notificationCallCount++;
+            document.getElementById('notification-inactive').style.display = 'none';
+            document.getElementById('notification-activity').style.display = 'block';
+
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.style.marginBottom = '4px';
+            logEntry.style.fontSize = '0.7rem';
+            logEntry.innerHTML = `<span style="color: #6b7280;">${timestamp}</span> <span style="color: #8b5cf6; font-weight: 600;">📧 Notification</span> <span style="color: #374151;">Sent email to ${customerEmail} for Order #${orderId}. Amount: $${(amount/100).toFixed(2)}</span>`;
+
+            const logContainer = document.getElementById('notification-log');
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            showToast('Notification Received', `Order ${orderId} payment event processed for ${customerEmail}.`);
+
+            // Clear existing timeout and set new one
+            clearTimeout(notificationTimeout);
+            notificationTimeout = setTimeout(() => {
+                document.getElementById('notification-activity').style.display = 'none';
+                document.getElementById('notification-inactive').style.display = 'block';
+                notificationCallCount = 0;
+            }, 8000);
+        }
+
+        function updateNotificationServiceStatus(isAvailable) {
+            const notificationInactive = document.getElementById('notification-inactive');
+            if (!notificationInactive) return;
+
+            if (isAvailable) {
+                notificationInactive.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 10px;">📬</div>
+                    <div style="font-size: 0.95rem; font-weight: 600; margin-bottom: 8px;">Notification Service Ready</div>
+                    <div style="font-size: 0.85rem; color: #9ca3af;">
+                        Waiting for notification events...
+                    </div>
+                `;
+            } else {
+                notificationInactive.innerHTML = `
+                    <div style="font-size: 2rem; margin-bottom: 10px;">⚪</div>
+                    <div style="font-size: 0.95rem; font-weight: 600; margin-bottom: 8px;">Notification Service Not Available</div>
+                    <div style="font-size: 0.85rem; color: #9ca3af;">
+                        <br><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 8px;">                       
+                    
+                `;
+            }
+        }
+
+        // Show notification service status when page loads
+        window.addEventListener('load', () => {
+            updateNotificationServiceStatus(notificationServiceAvailable);
+        });
 
         // Add CSS animation for gRPC indicator
         const style = document.createElement('style');

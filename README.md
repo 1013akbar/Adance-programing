@@ -1,23 +1,49 @@
-# Advanced Programming 2 - Assignment 2
+# Advanced Programming 2 - Assignment 3
 
 ## Student
-- Name: Taubakabyl Nurlybek
+- Name: Akbar Khalili
 - Course: Advanced Programming 2
-- Topic: gRPC Migration & Contract-First Development (Order & Payment)
+- Topic: Event-Driven Architecture (EDA) with Message Queues
 
-## Proto Repositories
-- Protos: https://github.com/taubakabylnurlybek/ap2-protos
-- Generated Code: https://github.com/taubakabylnurlybek/ap2-generated
+## Assignment 3: Event-Driven Architecture with Message Queues
 
-## Implemented Scope
-- Migration from REST to gRPC for inter-service communication
-- Contract-First approach with Protocol Buffers
-- Server-side Streaming for real-time order updates
-- Clean Architecture preserved
-- gRPC interceptors for logging (bonus)
-- Environment-based configuration
+### Scope
+- Lecture 5 (Message Queues) & Lecture 6 (Transactions & Reliability)
+- Deadline: 02.05.2026 23:59
 
-## Architecture Diagram
+### Learning Objectives
+- Implement Event-Driven Architecture using RabbitMQ
+- Manage service life-cycles with Graceful Shutdown
+- Ensure Message Reliability using Manual Acknowledgments (ACKs)
+- Implement Idempotent Consumers to handle duplicate events safely
+- Orchestrate multiple services and infrastructure using Docker Compose
+
+### Scenario: Asynchronous Notifications
+After Assignment 2's synchronous gRPC link, we now add a Notification Service with event-driven flow:
+Payment Service (Producer) -> Message Broker -> Notification Service (Consumer)
+
+### System Requirements
+
+#### 1. Notification Service (Consumer)
+- Listens to `payment.completed` queue
+- Logs email notifications: `[Notification] Sent email to user@example.com for Order #123. Amount: $99.99`
+- Decoupled from Order and Payment services
+
+#### 2. Payment Service (Producer)
+- Publishes events after successful payment (DB transaction committed)
+- Payload: JSON with order_id, amount, customer_email, status
+- Reliability: Ensures message delivery to broker
+
+#### 3. Reliability & Delivery Guarantees
+- **Manual ACKs**: Disabled auto-ack, acknowledge only after successful processing
+- **Persistence**: Durable queues survive broker restart
+- **Idempotency**: DB-based check to prevent duplicate processing
+
+#### 4. Infrastructure (Docker)
+- Everything via `docker-compose up`
+- Components: Order, Payment, Notification services + Databases + RabbitMQ
+
+### Architecture Diagram
 ```mermaid
 flowchart LR
     Client --> OrderAPI[Order Service API - REST]
@@ -31,23 +57,82 @@ flowchart LR
     PaymentUC --> PaymentRepo[Payment Repository]
     PaymentRepo --> PaymentDB[(Payment DB)]
 
+    PaymentUC --> RabbitMQ[(RabbitMQ)]
+    RabbitMQ --> NotificationService[Notification Service]
+    NotificationService --> NotificationDB[(Notification DB)]
+
     StreamClient[gRPC Stream Client] --> OrderGRPC[Order Service gRPC Streaming]
-    OrderGRPC --> OrderUC
 ```
 
-## Implemented Scope
-- Two microservices in Go:
-  - `order-service`
-  - `payment-service`
-- REST communication only (Gin)
-- Clean Architecture layering inside each service
-- Separate PostgreSQL database per service
-- Timeout-based synchronous HTTP integration
-- Failure handling when Payment Service is unavailable
-- Bonus: Idempotency support through `Idempotency-Key`
+### Design Quality Standards
 
-## Bounded Contexts
-1. Order Context
+#### Best-Case Design (Target)
+- **At-least-once delivery**: System never loses messages if consumer crashes
+- **Separation of Concerns**: Messaging logic behind interfaces
+- **Idempotency**: Clear mechanism for duplicate message filtering
+- **Graceful Shutdown**: Using os/signal for proper connection closure
+
+#### Worst-Case Design (Avoid)
+- Synchronous coupling between Payment and Notification services
+- Auto-ACK losing messages on consumer crash
+- No Docker requiring manual RabbitMQ installation
+
+### Implementation Details
+
+#### Idempotency Strategy
+The Notification Service uses a PostgreSQL table `processed_events` to track processed event IDs:
+- Each event ID (order_id) is stored after successful processing
+- Duplicate events are detected and ignored before logging
+- Ensures exactly-once processing semantics
+
+#### ACK Logic Implementation
+- **Manual ACKs**: Consumer disables auto-ack in `ch.Consume()`
+- **QoS=1**: Fair dispatch ensures one message per consumer
+- **ACK on Success**: `d.Ack(false)` only after email logging and DB update
+- **NACK on Failure**: `d.Nack(false, true)` requeues on processing errors
+- **No Requeue on Parse Error**: `d.Nack(false, false)` discards malformed messages
+
+### Services Overview
+
+1. **Order Service** (Port 8081)
+   - REST API for order management
+   - gRPC server for payment integration
+   - PostgreSQL database
+
+2. **Payment Service** (Port 8082)
+   - REST API for payment processing
+   - gRPC server for order integration
+   - RabbitMQ publisher for events
+   - PostgreSQL database
+
+3. **Notification Service** (Port 8083)
+   - RabbitMQ consumer for payment events
+   - Idempotent event processing
+   - PostgreSQL database for event tracking
+
+4. **RabbitMQ** (Ports 5672, 15672)
+   - Message broker with durable queues
+   - Management UI at http://localhost:15672
+
+### Running the System
+
+```bash
+# Start all services
+docker-compose up --build
+
+# Or run in background
+docker-compose up -d --build
+```
+
+### Testing the Event Flow
+
+1. **Create Order** (via frontend or API)
+2. **Create Payment** (via frontend or API)
+3. **Observe Logs**: Notification service logs email notifications
+4. **Check RabbitMQ**: Management UI shows queue activity
+
+### Bonus: Dead Letter Queue (DLQ)
+For advanced failure handling, configure RabbitMQ with DLQ for messages that fail after 3 retries.
 - Owns order lifecycle state: `Pending`, `Paid`, `Failed`, `Cancelled`
 - Owns customer/order attributes
 - Calls Payment Service for authorization

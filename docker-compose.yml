@@ -25,6 +25,18 @@ services:
     volumes:
       - payment_db_data:/var/lib/postgresql/data
 
+  notification-db:
+    image: postgres:16
+    container_name: notification-db
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: notification_user
+      POSTGRES_PASSWORD: notification_pass
+    ports:
+      - "5435:5432"
+    volumes:
+      - notification_db_data:/var/lib/postgresql/data
+
   payment-service:
     image: golang:1.22
     container_name: payment-service
@@ -37,8 +49,11 @@ services:
       DB_DSN: postgres://payment_user:payment_pass@payment-db:5432/payment_db?sslmode=disable
       HTTP_PORT: 8082
       GRPC_PORT: 50051
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      QUEUE_NAME: payment.completed
     depends_on:
       - payment-db
+      - rabbitmq
     ports:
       - "8082:8082"
       - "50051:50051"
@@ -63,6 +78,37 @@ services:
       - "8081:8081"
       - "50052:50052"
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  notification-service:
+    image: golang:1.22
+    container_name: notification-service
+    working_dir: /app
+    volumes:
+      - ./notification-service:/app
+    command: sh -c "go mod download && go run ./cmd/notification-service"
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      QUEUE_NAME: payment.completed
+      DB_DSN: postgres://notification_user:notification_pass@notification-db:5432/notification_db?sslmode=disable
+    depends_on:
+      - rabbitmq
+      - notification-db
+    ports:
+      - "8083:8083"
+
 volumes:
   order_db_data:
   payment_db_data:
+  notification_db_data:
+  rabbitmq_data:

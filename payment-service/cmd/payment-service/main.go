@@ -10,16 +10,16 @@ import (
 	"os"
 	"payment-service/internal/app"
 	"payment-service/internal/repository"
-	transporthttp "payment-service/internal/transport/http"
 	transportgrpc "payment-service/internal/transport/grpc"
+	transporthttp "payment-service/internal/transport/http"
 	"payment-service/internal/usecase"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/lib/pq"
 	"github.com/taubakabylnurlybek/ap2-generated/payment"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -30,7 +30,12 @@ func main() {
 	orderBaseURL := getEnv("ORDER_SERVICE_BASE_URL", "http://localhost:8081")
 	orderHTTPClient := &http.Client{Timeout: 2 * time.Second}
 	orderClient := app.NewRESTOrderClient(orderBaseURL, orderHTTPClient)
-	paymentUC := usecase.NewPaymentService(paymentRepo, orderClient)
+
+	// Initialize event publisher (use HTTP Notification Service directly)
+	notificationURL := getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8083")
+	eventPublisher := app.NewHTTPNotificationPublisher(notificationURL, &http.Client{Timeout: 2 * time.Second})
+
+	paymentUC := usecase.NewPaymentService(paymentRepo, orderClient, eventPublisher)
 	handler := transporthttp.NewHandler(paymentUC)
 	paymentGRPCServer := transportgrpc.NewPaymentServiceServer(paymentUC)
 
