@@ -399,8 +399,40 @@
             border-radius: 4px;
         }
 
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--neutral-400);
+        .performance-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .metric-card .metric-label {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-bottom: 5px;
+        }
+
+        .metric-card .metric-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-light);
+        }
+
+        .cache-hit {
+            color: #10b981 !important;
+        }
+
+        .cache-miss {
+            color: #f59e0b !important;
         }
 
         code {
@@ -470,6 +502,26 @@
             <div class="stat-card">
                 <div class="label">gRPC Ports</div>
                 <div class="value">:50051-52</div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="performance-metrics">
+            <div class="metric-card">
+                <div class="metric-label">Cache Status</div>
+                <div class="metric-value" id="cache-status">Unknown</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Rate Limit</div>
+                <div class="metric-value" id="rate-limit-status">OK</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Background Jobs</div>
+                <div class="metric-value" id="job-status">Active</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Email Provider</div>
+                <div class="metric-value" id="email-provider">Simulated</div>
             </div>
         </div>
 
@@ -669,6 +721,21 @@
             notification: 'http://localhost:8083'
         };
 
+        // Performance tracking
+        let cacheHits = 0;
+        let cacheMisses = 0;
+        let rateLimitHits = 0;
+
+        function updatePerformanceMetrics() {
+            const cacheStatus = cacheHits > cacheMisses ? 'HIT' : cacheMisses > 0 ? 'MISS' : 'Unknown';
+            document.getElementById('cache-status').textContent = cacheStatus;
+            document.getElementById('cache-status').className = cacheStatus === 'HIT' ? 'metric-value cache-hit' : 'metric-value cache-miss';
+
+            const rateLimitStatus = rateLimitHits > 0 ? 'Limited' : 'OK';
+            document.getElementById('rate-limit-status').textContent = rateLimitStatus;
+            document.getElementById('rate-limit-status').className = rateLimitStatus === 'Limited' ? 'metric-value cache-miss' : 'metric-value cache-hit';
+        }
+
         function showResponse(elementId, data, isError = false) {
             const elem = document.getElementById(elementId);
             elem.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
@@ -776,16 +843,29 @@
             }
 
             showLoading('order-response');
+            const startTime = Date.now();
 
             try {
                 const response = await fetch(`${API_CONFIG.order}/orders/${orderId}`);
                 const data = await parseResponseBody(response);
-                
+                const responseTime = Date.now() - startTime;
+
                 if (!response.ok) {
                     const errorMessage = getResponseError(response, data);
+                    if (response.status === 429) {
+                        rateLimitHits++;
+                        updatePerformanceMetrics();
+                    }
                     showResponse('order-response', `Error: ${response.status} - ${errorMessage}`, true);
                 } else {
                     showResponse('order-response', data);
+                    // Simple heuristic: fast responses (< 50ms) are likely cache hits
+                    if (responseTime < 50) {
+                        cacheHits++;
+                    } else {
+                        cacheMisses++;
+                    }
+                    updatePerformanceMetrics();
                 }
             } catch (error) {
                 showResponse('order-response', `Error: ${error.message}`, true);

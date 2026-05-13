@@ -71,24 +71,23 @@ services:
       PAYMENT_SERVICE_ADDR: payment-service:50051
       HTTP_PORT: 8081
       GRPC_PORT: 50052
+      REDIS_ADDR: redis:6379
     depends_on:
       - order-db
       - payment-service
+      - redis
     ports:
       - "8081:8081"
       - "50052:50052"
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+  redis:
+    image: redis:7-alpine
+    container_name: redis
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "6379:6379"
     volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
+      - redis_data:/data
+    command: redis-server --appendonly yes
 
   notification-service:
     image: golang:1.22
@@ -101,9 +100,12 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       QUEUE_NAME: payment.completed
       DB_DSN: postgres://notification_user:notification_pass@notification-db:5432/notification_db?sslmode=disable
+      REDIS_ADDR: redis:6379
+      PROVIDER_MODE: SIMULATED
     depends_on:
       - rabbitmq
       - notification-db
+      - redis
     ports:
       - "8083:8083"
 
@@ -112,3 +114,4 @@ volumes:
   payment_db_data:
   notification_db_data:
   rabbitmq_data:
+  redis_data:

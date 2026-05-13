@@ -1,10 +1,14 @@
 package http
 
 import (
+	"order-service/internal/transport/http/middleware"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
 
-func RegisterRoutes(router *gin.Engine, h *Handler) {
+func RegisterRoutes(router *gin.Engine, h *Handler, redisClient *redis.Client) {
 	// Enable CORS
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
@@ -18,6 +22,12 @@ func RegisterRoutes(router *gin.Engine, h *Handler) {
 		}
 		c.Next()
 	})
+
+	// Rate limiter: 10 requests per minute per IP
+	if redisClient != nil {
+		rateLimiter := middleware.NewRateLimiter(redisClient, 10, time.Minute)
+		router.Use(rateLimiter.Middleware())
+	}
 
 	router.POST("/orders", h.CreateOrder)
 	router.GET("/orders/:id", h.GetOrder)

@@ -1,16 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"notification-service/internal/notification"
+	"notification-service/internal/worker"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -43,6 +47,43 @@ type incomingNotification struct {
 }
 
 func main() {
+	// Initialize Redis
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	defer redisClient.Close()
+
+	// Test Redis connection
+	ctx := context.Background()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Printf("Redis unavailable, continuing without caching/idempotency: %v", err)
+		redisClient = nil
+	}
+
+	// Initialize Email Sender based on configuration
+	providerMode := getEnv("PROVIDER_MODE", "SIMULATED")
+	var emailSender notification.EmailSender
+
+	switch providerMode {
+	case "SMTP":
+		emailSender = notification.NewSMTPEmailSender(
+			getEnv("SMTP_HOST", "smtp.gmail.com"),
+			getEnv("SMTP_PORT", "587"),
+			getEnv("SMTP_USERNAME", ""),
+			getEnv("SMTP_PASSWORD", ""),
+			getEnv("SMTP_FROM", "noreply@example.com"),
+		)
+	default: // SIMULATED
+		emailSender = notification.NewSimulatedEmailSender(0.2, 500*time.Millisecond) // 20% failure rate, 500ms base delay
+	}
+
+	// Initialize Background Worker
+	backgroundWorker := worker.NewBackgroundWorker(redisClient, emailSender, 3, 2*time.Second)
+
+	// Start retry processor
+	backgroundWorker.StartRetryProcessor(ctx)
+
 	rabbitURL := getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
 	queueName := getEnv("QUEUE_NAME", "payment.completed")
 
@@ -88,7 +129,7 @@ func main() {
 						log.Printf("failed to register consumer, continuing without consumer: %v", err)
 					} else {
 						log.Printf("Notification service started and listening on queue %s", queueName)
-						go consumeMessages(msgs)
+						go consumeMessages(msgs, backgroundWorker)
 					}
 				}
 			}
@@ -116,13 +157,13 @@ func main() {
 	log.Println("Shutting down notification service...")
 }
 
-func consumeMessages(msgs <-chan amqp091.Delivery) {
+func consumeMessages(msgs <-chan amqp091.Delivery, backgroundWorker *worker.BackgroundWorker) {
 	for d := range msgs {
-		processMessage(d)
+		processMessage(d, backgroundWorker)
 	}
 }
 
-func processMessage(d amqp091.Delivery) {
+func processMessage(d amqp091.Delivery, backgroundWorker *worker.BackgroundWorker) {
 	var event PaymentEvent
 	if err := json.Unmarshal(d.Body, &event); err != nil {
 		log.Printf("Failed to unmarshal message: %v", err)
@@ -130,6 +171,25 @@ func processMessage(d amqp091.Delivery) {
 		return
 	}
 
+	// Create background job
+	job := worker.NotificationJob{
+		PaymentID:     event.OrderID, // Using OrderID as PaymentID for simplicity
+		OrderID:       event.OrderID,
+		Amount:        event.Amount,
+		CustomerEmail: event.CustomerEmail,
+		Status:        event.Status,
+		RetryCount:    0,
+	}
+
+	// Process job asynchronously
+	go func() {
+		ctx := context.Background()
+		if err := backgroundWorker.ProcessJob(ctx, job); err != nil {
+			log.Printf("Failed to process notification job: %v", err)
+		}
+	}()
+
+	// Store notification for API access
 	notification := NotificationMessage{
 		OrderID:       event.OrderID,
 		Amount:        event.Amount,
@@ -138,9 +198,6 @@ func processMessage(d amqp091.Delivery) {
 		Timestamp:     time.Now().Format(time.RFC3339),
 	}
 	storeNotification(notification)
-
-	log.Printf("[Notification] Sent email to %s for Order #%s. Amount: $%.2f",
-		event.CustomerEmail, event.OrderID, float64(event.Amount)/100)
 
 	d.Ack(false)
 }

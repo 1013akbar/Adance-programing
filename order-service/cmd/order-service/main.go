@@ -1,23 +1,25 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net"
 	"order-service/internal/app"
 	"order-service/internal/repository"
-	transport "order-service/internal/transport/http"
 	transportgrpc "order-service/internal/transport/grpc"
+	transport "order-service/internal/transport/http"
 	"order-service/internal/usecase"
 	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
+	_ "github.com/lib/pq"
 	"github.com/taubakabylnurlybek/ap2-generated/order"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
-	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -26,6 +28,19 @@ func main() {
 
 	if err := runMigrations(db); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
+	}
+
+	// Initialize Redis client
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+	})
+	defer redisClient.Close()
+
+	// Test Redis connection
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Printf("Redis unavailable, continuing without cache: %v", err)
+		redisClient = nil
 	}
 
 	paymentServiceAddr := getEnv("PAYMENT_SERVICE_ADDR", "localhost:50051")
@@ -38,7 +53,7 @@ func main() {
 	paymentClient := app.NewGRPCPaymentClient(conn)
 
 	orderRepo := repository.NewOrderPostgresRepository(db)
-	orderUC := usecase.NewOrderService(orderRepo, paymentClient)
+	orderUC := usecase.NewOrderService(orderRepo, paymentClient, redisClient)
 	orderGRPCServer := transportgrpc.NewOrderServiceServer(orderUC)
 	orderUC.SetStatusUpdater(orderGRPCServer)
 	handler := transport.NewHandler(orderUC)
@@ -61,7 +76,7 @@ func main() {
 	}()
 
 	router := gin.Default()
-	transport.RegisterRoutes(router, handler)
+	transport.RegisterRoutes(router, handler, redisClient)
 
 	port := getEnv("HTTP_PORT", "8081")
 	log.Printf("HTTP server listening on :%s", port)

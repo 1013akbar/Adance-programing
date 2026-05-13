@@ -2,10 +2,12 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"order-service/internal/domain"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 )
 
@@ -13,10 +15,15 @@ type OrderService struct {
 	repo          OrderRepository
 	paymentClient PaymentClient
 	statusUpdater StatusUpdater
+	redisClient   *redis.Client
 }
 
-func NewOrderService(repo OrderRepository, paymentClient PaymentClient) *OrderService {
-	return &OrderService{repo: repo, paymentClient: paymentClient}
+func NewOrderService(repo OrderRepository, paymentClient PaymentClient, redisClient *redis.Client) *OrderService {
+	return &OrderService{
+		repo:          repo,
+		paymentClient: paymentClient,
+		redisClient:   redisClient,
+	}
 }
 
 func (s *OrderService) SetStatusUpdater(updater StatusUpdater) {
@@ -64,6 +71,20 @@ func (s *OrderService) CreateOrder(ctx context.Context, customerID, itemName str
 }
 
 func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*domain.Order, error) {
+	// Try to get from cache first (Cache-aside pattern)
+	if s.redisClient != nil {
+		cacheKey := "order:" + orderID
+		cachedData, err := s.redisClient.Get(ctx, cacheKey).Result()
+		if err == nil {
+			var order domain.Order
+			if json.Unmarshal([]byte(cachedData), &order) == nil {
+				return &order, nil
+			}
+		}
+		// If cache miss or error, continue to database
+	}
+
+	// Get from database
 	order, err := s.repo.GetByID(ctx, orderID)
 	if err != nil {
 		return nil, err
@@ -86,9 +107,19 @@ func (s *OrderService) GetOrder(ctx context.Context, orderID string) (*domain.Or
 					if s.statusUpdater != nil {
 						s.statusUpdater.NotifyStatusUpdate(order.ID, nextStatus)
 					}
+					// Invalidate cache when status changes
+					if s.redisClient != nil {
+						s.redisClient.Del(ctx, "order:"+orderID)
+					}
 				}
 			}
 		}
+	}
+
+	// Cache the order (TTL: 5 minutes)
+	if s.redisClient != nil {
+		orderJSON, _ := json.Marshal(order)
+		s.redisClient.Set(ctx, "order:"+orderID, orderJSON, 5*time.Minute)
 	}
 
 	return order, nil
@@ -112,5 +143,11 @@ func (s *OrderService) CancelOrder(ctx context.Context, orderID string) (*domain
 	if s.statusUpdater != nil {
 		s.statusUpdater.NotifyStatusUpdate(orderID, domain.OrderStatusCancelled)
 	}
+
+	// Invalidate cache when status changes
+	if s.redisClient != nil {
+		s.redisClient.Del(ctx, "order:"+orderID)
+	}
+
 	return order, nil
 }
